@@ -54,7 +54,8 @@ def get_nearest(df_pairs: DataFrame, df_events: DataFrame, rec_dist: int=1) -> D
                                                         F.col('event.user')
                                                         ).alias('user_left'),
                                             F.col('lat').alias('lat'),
-                                            F.col('lon').alias('lon')
+                                            F.col('lon').alias('lon'),
+                                            F.coalesce("event.datetime","event.message_ts").alias('last_ts').cast('timestamp')
                                             ).alias('df_left'),
                                     'user_left',
                                     'inner'
@@ -73,7 +74,7 @@ def get_nearest(df_pairs: DataFrame, df_events: DataFrame, rec_dist: int=1) -> D
 
     return df_dist.select('user_left', 'user_right', 
                             F.lit(datetime.now(timezone.utc)).alias('processed_dttm'),
-                            'zone_id', F.from_utc_timestamp(F.lit(datetime.now(timezone.utc)),F.col('timezone')).alias('local_time'))                        
+                            'zone_id', F.from_utc_timestamp(F.col('last_ts'),F.col('timezone')).alias('local_time'))                        
 
 def main():
     dds_path = sys.argv[1]
