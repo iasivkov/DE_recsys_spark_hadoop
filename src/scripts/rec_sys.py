@@ -12,20 +12,20 @@ from tools import read_df, sph_dist
     
 def get_user_channel(df: DataFrame) -> DataFrame:
     df_user_channel = df\
-                        .select('event_type', 'event.user','event.subscription_channel', 'timezone')\
+                        .select('event_type', 'event.user','event.subscription_channel')\
                         .filter(F.col('event_type') == 'subscription')\
                         .drop('event_type')\
                         .dropDuplicates().dropna()
     return df_user_channel
 
 def get_pairs(df_events: DataFrame, df_user_channel: DataFrame, df_dm_user: DataFrame) -> DataFrame:
-    
-    # добавляем информацию о городе и локальном времени
+       
+    # добавляем информацию о городе и временной зоне
     df_user_channel_city = df_user_channel.alias('df_u').join(df_dm_user.alias('df_d')\
-                                                             .select('user_id','act_city'),
+                                                             .select('user_id','act_city','local_time'),
                                                              df_dm_user.user_id == df_user_channel.user,
                                                              'inner')\
-                            .select('df_u.user', 'df_u.subscription_channel', 'df_d.act_city', 'df_u.timezone')
+                            .select('df_u.user', 'df_u.subscription_channel', 'df_d.act_city', 'df_d.local_time')
     
     # составляем пары по подписке на один и тот же канал
     df_pairs = df_user_channel_city.alias('df1')\
@@ -34,7 +34,7 @@ def get_pairs(df_events: DataFrame, df_user_channel: DataFrame, df_dm_user: Data
                 .select(F.col('df1.user').alias('user_left'),
                         F.col('df2.user').alias('user_right'),
                         F.col('act_city').alias('zone_id'),
-                        F.col('df2.timezone'))\
+                        F.col('df1.local_time').alias('local_time'))\
                 .filter(F.col('user_left') != F.col('user_right'))
     
     # оставляем уникальные комбинации без перестановок
@@ -49,24 +49,33 @@ def get_pairs(df_events: DataFrame, df_user_channel: DataFrame, df_dm_user: Data
     return df_pairs
 
 def get_nearest(df_pairs: DataFrame, df_events: DataFrame, rec_dist: int=1) -> DataFrame:
-    df_dist = sph_dist(df_pairs.join(df_events.select(F.coalesce(F.col('event.message_from'), 
-                                                        F.col('event.reaction_from'),
-                                                        F.col('event.user')
-                                                        ).alias('user_left'),
-                                            F.col('lat').alias('lat'),
-                                            F.col('lon').alias('lon'),
-                                            F.coalesce("event.datetime","event.message_ts").alias('last_ts').cast('timestamp')
-                                            ).alias('df_left'),
+    # окно для определения последнего события
+    window1 = Window.partitionBy('user_left').orderBy(F.desc('ts')) 
+    window2 = Window.partitionBy('user_right').orderBy(F.desc('ts'))
+    
+    df_dist = sph_dist(df_pairs.join(df_events.withColumn('user_left',F.coalesce(F.col('event.message_from'),  
+                                                                F.col('event.reaction_from'), 
+                                                                F.col('event.user')
+                                                                ))\
+                                            .withColumn('ts',F.coalesce("event.datetime","event.message_ts"))\
+                                            .withColumn("last", F.row_number().over(window1)).filter('last==1').drop('last')\
+                                            .select('user_left',
+                                                    F.col('lat').alias('lat'),
+                                                    F.col('lon').alias('lon')
+                                                         ).dropna().alias('df_left'),
                                     'user_left',
                                     'inner'
                                     )\
-                                .join(df_events.select(F.coalesce(F.col('event.message_from'), 
-                                                            F.col('event.reaction_from'),
-                                                            F.col('event.user')
-                                                            ).alias('user_right'),
+                                .join(df_events.withColumn('user_right',F.coalesce(F.col('event.message_from'),  
+                                                                F.col('event.reaction_from'), 
+                                                                F.col('event.user')
+                                                                ))\
+                                            .withColumn('ts',F.coalesce("event.datetime","event.message_ts"))\
+                                            .withColumn("last", F.row_number().over(window2)).filter('last==1').drop('last')\
+                                            .select('user_right',
                                                 F.col('lat').alias('lat_2'),
                                                 F.col('lon').alias('lon_2')
-                                                ).alias('df_right'),
+                                                ).dropna().alias('df_right'),
                                     'user_right',
                                     'inner'
                                     )
@@ -74,7 +83,7 @@ def get_nearest(df_pairs: DataFrame, df_events: DataFrame, rec_dist: int=1) -> D
 
     return df_dist.select('user_left', 'user_right', 
                             F.lit(datetime.now(timezone.utc)).alias('processed_dttm'),
-                            'zone_id', F.from_utc_timestamp(F.col('last_ts'),F.col('timezone')).alias('local_time'))                        
+                            'zone_id', 'local_time')                        
 
 def main():
     dds_path = sys.argv[1]

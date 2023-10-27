@@ -28,6 +28,7 @@ def sprint7_region_dag():
                             application=os.path.join(scripts_path, 'region_dm.py'),
                             conn_id='yarn_spark',
                             executor_cores=4,
+                            executor_memory='4G',
                             application_args=['/user/iasivkov/data/dds', '/user/iasivkov/data/analytics']
                             )
 

@@ -17,7 +17,7 @@ def message_city(base_input_path: str, geo_path: str, session: SparkSession, fra
     
     sql = session
 
-    geo_df = read_df(geo_path,session).withColumnRenamed('lat','lat_2').withColumnRenamed('lng','lon_2')#.\    withColumn('date', F.lit(date).cast('date'))
+    geo_df = read_df(geo_path,session).withColumnRenamed('lat','lat_2').withColumnRenamed('lng','lon_2')
    
     events = read_df(os.path.join(base_input_path, 'events'), session)
     events = events.sample(frac)
@@ -28,7 +28,13 @@ def message_city(base_input_path: str, geo_path: str, session: SparkSession, fra
     window = Window.partitionBy(F.col('event')).orderBy(F.asc('dist'))
     event_city_df_rank = event_city_df.withColumn('rank', F.row_number().over(window))
     
-    res_df = event_city_df_rank.filter('rank==1').drop('rank','lat_2', 'lon_2', 'id', 'coords')
+    res_df = event_city_df_rank.filter('rank==1').drop('rank','lat_2', 'lon_2', 'id', 'coords')\
+                                .withColumn('city_new', F.when(F.col('lat').isNull()|F.col('lon').isNull(), None).otherwise(F.col('city')))\
+                                .withColumn('timezone_new', F.when(F.col('lat').isNull()|F.col('lon').isNull(), None).otherwise(F.col('timezone')))\
+                                .drop('city')\
+                                .withColumnRenamed('city_new', 'city')\
+                                .drop('timezone')\
+                                .withColumnRenamed('timezone_new', 'timezone')
     
     return res_df
     

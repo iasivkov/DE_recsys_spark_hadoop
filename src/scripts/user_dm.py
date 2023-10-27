@@ -11,6 +11,7 @@ import sys
 from tools import read_df
 
 def travel(df: DataFrame)-> DataFrame:
+    # Находим последовательость посещенных городов
     win = Window.partitionBy('user_id').orderBy('message_ts')
     df_travel = df.select('user_id', 'message_ts', 'city', F.when(F.col('city') == F.lead('city').over(win), 
                                                                  None).otherwise(F.col('city')).alias('travel')).dropna()
@@ -18,7 +19,7 @@ def travel(df: DataFrame)-> DataFrame:
                                                                        F.collect_list('travel').alias('travel_array'))
 
 def home(df: DataFrame, days: int=27) -> DataFrame:
-   
+    # Находим домашний город
     window = Window.partitionBy(['user_id','city']).orderBy('date')
     user_df = df.select('user_id', 'city', F.col('message_ts').cast('date').alias('date')).\
     withColumn('num', F.dense_rank().over(window))
@@ -26,11 +27,12 @@ def home(df: DataFrame, days: int=27) -> DataFrame:
                                                                               F.max('date').alias('end')).\
     select('user_id','city','seq', 'end')
 
-    return user_df.filter('seq>={}'.format(days)).orderBy(['end','seq', 'city']).groupBy('user_id').agg(F.last('city').alias('city'),
+    return user_df.filter('seq>={}'.format(days)).orderBy(['end','seq', 'city']).groupBy('user_id').agg(F.last('city').alias('home_city'),
                                                                                            F.last('end').alias('end'),
-                                                                                           F.last('seq').alias('seq')).select(['user_id','city'])
+                                                                                           F.last('seq').alias('seq')).select(['user_id','home_city'])
 
 def last_city(df: DataFrame) -> DataFrame:
+    # Находим последний город
     window = Window.partitionBy('user_id').orderBy(F.desc('message_ts'))
 
     return df.withColumn("last", F.row_number().over(window)).filter('last==1').drop('last').withColumnRenamed('city','act_city')\
@@ -38,7 +40,7 @@ def last_city(df: DataFrame) -> DataFrame:
 
 def local_time(df: DataFrame) -> DataFrame:
     return df.withColumn('local_time', F.from_utc_timestamp(F.col('message_ts'),F.col('timezone'))).\
-                drop('timezone')
+                drop('timezone','message_ts')
     
 
 #-------------------------------------------------------------------------------------------------
@@ -56,13 +58,13 @@ def main():
     
     df = read_df(dds_path, sql)
     user_df = df\
-    .withColumn('user_id',  F.coalesce(F.col('event.message_from'), 
-                                F.col('event.reaction_from'),
-                                F.col('event.user')))\
-    .select('user_id',
+        .select(F.coalesce(F.col('event.message_from'),  
+                                F.col('event.reaction_from'), 
+                                F.col('event.user')).alias('user_id'),
             'city',
             'timezone',
-            F.coalesce("event.datetime","event.message_ts").alias('message_ts').cast('timestamp'))
+            F.coalesce("event.datetime","event.message_ts").alias('message_ts').cast('timestamp')
+            ).dropna()
     last_city_df = last_city(user_df)
     home_city_df = home(user_df)
     travel_df = travel(user_df)
