@@ -19,7 +19,7 @@ scripts_path = os.path.join('/','/'.join([x for x in dags_path.split('/')[0:-1] 
 # Стартуем даг каждый день в 12 часов. Чтобы можно было предлагать пользователю актуальную рекламу и рекомендации друзей
 # можно и чаще, если позволяют ресрусы.
 @dag(schedule_interval='0 12 * * *', start_date=datetime(2023, 10, 25))
-def sprint7_user_dag():
+def recsys_user_dag():
 
     
     # объявляем задачу с помощью SparkSubmitOperator
@@ -41,6 +41,6 @@ def sprint7_user_dag():
 
     ( user_dm>> rec_sys_dm )
 
-dag = sprint7_user_dag() 
+dag = recsys_user_dag() 
 
 dag
