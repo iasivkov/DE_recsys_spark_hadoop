@@ -20,7 +20,7 @@ scripts_path = os.path.join('/','/'.join([x for x in dags_path.split('/')[0:-1] 
 # Стартуем даг каждый день в 9 часов утра. 
 # Чтобы оперативно обновлять витрины для рекомендаций и витрину по пользователям 
 @dag(schedule_interval='0 9 * * *', start_date=datetime(2023, 10, 25))
-def first_dag_sprint7_city_dag():
+def first_city_dag():
 
     
     # объявляем задачу с помощью SparkSubmitOperator
