@@ -36,6 +36,6 @@ def first_city_dag():
 
     ( event_city_dds )
 
-dag = first_dag_sprint7_city_dag() 
+dag = first_city_dag() 
 
 dag
