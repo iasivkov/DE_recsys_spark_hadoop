@@ -19,7 +19,7 @@ scripts_path = os.path.join('/','/'.join([x for x in dags_path.split('/')[0:-1] 
 # Стартуем даг каждый понедельник в 0 часов утра. 
 # Обновляем витрину по регионам раз в неделю 
 @dag(schedule_interval='0 0 * * 1', start_date=datetime(2023, 10, 25))
-def region_dag():
+def recsys_region_dag():
 
     
     # объявляем задачу с помощью SparkSubmitOperator
@@ -34,6 +34,6 @@ def region_dag():
 
     ( region_dm )
 
-dag = region_dag() 
+dag = recsys_region_dag() 
 
 dag
